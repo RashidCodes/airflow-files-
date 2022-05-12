@@ -1,6 +1,7 @@
+
 # This script is used to copy the employees.csv file to the docker container 
 
-docker cp employees.csv datawarehouse:/var/opt/mssql/
+docker cp "/Users/rashid/airflow/dags/files/employees.csv" datawarehouse:/var/opt/mssql/
 
 
 if [[ $? -ne 0 ]]

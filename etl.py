@@ -36,14 +36,16 @@ with DAG (
       task_id="create_employees_table",
       mssql_conn_id="airflow_mssql",
       sql="""
-      if object_id('dbo.employees') is null
-         create table dbo.employees (
-            "Serial Number" INT PRIMARY KEY,
-            "Company Name" VARCHAR(100),
-            "Employee Markme" VARCHAR(100),
-            "Description" VARCHAR(100),
-            "Leave" INT
-         );
+      if object_id('dbo.employees') is not null
+         drop table dbo.employees;
+
+      create table dbo.employees (
+         "Serial Number" INT PRIMARY KEY,
+         "Company Name" VARCHAR(1000),
+         "Employee Markme" VARCHAR(1000),
+         "Description" VARCHAR(1000),
+         "Leave" INT
+      );
       """
    )
 
@@ -52,14 +54,16 @@ with DAG (
       task_id="create_employees_temp_table",
       mssql_conn_id="airflow_mssql",
       sql="""
-      if object_id('dbo.employees_temp') is null
-         create table dbo.employees_temp (
-            "Serial Number" INT PRIMARY KEY,
-            "Company Name" VARCHAR(50),
-            "Employee Markme" VARCHAR(100),
-            "Description" VARCHAR(100),
-            "Leave" INT
-         );
+      if object_id('dbo.employees_temp') is not null
+         drop table dbo.employees_temp;
+
+      create table dbo.employees_temp (
+         "Serial Number" INT PRIMARY KEY,
+         "Company Name" VARCHAR(1000),
+         "Employee Markme" VARCHAR(1000),
+         "Description" VARCHAR(1000),
+         "Leave" INT
+      );
       """,
    )
 
@@ -87,15 +91,16 @@ with DAG (
    # transfer data to docker 
    transfer_data = BashOperator(
       task_id='transfer_data',
-      bash_command="scripts/test.sh"
+      bash_command="/Users/rashid/airflow/dags/scripts/test.sh "
    )
+
    
       
    @dag.task(task_id="bulk_insert_data")
    def insert_data():
       try:
          mssql_hook = MsSqlHook(mssql_conn_id='airflow_mssql', schema='jade') 
-         bulk_sql = f"""BULK INSERT dbo.employees_temp FROM '/var/opt/mssql/employees.csv' WITH (FORMAT='CSV')"""
+         bulk_sql = f"""BULK INSERT dbo.employees_temp FROM '/var/opt/mssql/employees.csv' WITH (FIRSTROW=2, FORMAT='CSV')"""
          mssql_hook.run(bulk_sql)
       except Exception as e:
          print(e)
@@ -110,17 +115,19 @@ with DAG (
    @task
    def merge_data():
       query = r"""
-         MERGE 
-         INTO employees as target 
+         TRUNCATE TABLE dbo.employees;
+
+         MERGE
+         INTO dbo.employees as target
          USING (
-            SELECT DISTINCT * FROM employees_temp 
-         ) as source 
+            SELECT DISTINCT * FROM dbo.employees_temp
+         ) as source
          ON (target."Serial Number" = source."Serial Number")
-         WHEN MATCHED 
-            THEN UPDATE 
+         WHEN MATCHED
+            THEN UPDATE
                SET target."Serial Number" = source."Serial Number"
          WHEN NOT MATCHED
-            THEN INSERT VALUES (src.*)
+            THEN INSERT VALUES (source."Serial Number", source."Company Name", source."Employee Markme", source."Description", source."Leave");
       """
 
       try:
